@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Votação — Urna Escolar</title>
+<link rel="stylesheet" href="css/urna.css">
+</head>
+<body>
+<header>
+  <div><b id="escola">Urna</b><br><span>Eleição do Grêmio <span id="ano"></span></span></div>
+  <span>Voto</span>
+</header>
+<main>
+  <div class="urna">
+    <div class="display" aria-live="polite">
+      <div class="tag">Seu voto para</div>
+      <h2 style="font-size:30px">Grêmio Estudantil</h2>
+      <div class="digits" id="digits"></div>
+      <div id="chapaView" style="flex:1;display:flex;flex-direction:column">
+        <div class="hint">DIGITE O NÚMERO DA CHAPA</div>
+      </div>
+    </div>
+    <div class="keys">
+      <div class="grid" id="teclado"></div>
+      <div class="acts">
+        <button class="k w" id="kBranco">BRANCO</button>
+        <button class="k c" id="kCorrige">CORRIGE</button>
+        <button class="k f" id="kConfirma" disabled>CONFIRMA</button>
+      </div>
+    </div>
+  </div>
+</main>
+<div class="foot">Sistema escolar de votação.</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script src="js/state.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/voto.js"></script>
+</body>
+</html>
