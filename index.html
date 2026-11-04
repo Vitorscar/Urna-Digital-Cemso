@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Urna Digital Escolar</title>
+<link rel="stylesheet" href="css/urna.css">
+</head>
+<body>
+<header>
+  <div>
+    <b id="escola">Carregando…</b><br>
+    <span>Eleição do Grêmio Estudantil <span id="ano"></span></span>
+  </div>
+  <span>Sessão de votação</span>
+</header>
+
+<main>
+  <h1 class="title">ELEIÇÃO DO GRÊMIO ESTUDANTIL</h1>
+  <p class="sub">Conheça as chapas, digite sua matrícula e vote com segurança.</p>
+  <div class="chapas" id="listaChapas"></div>
+  <div class="login">
+    <label for="mat">Sua matrícula</label>
+    <input type="text" id="mat" inputmode="numeric" pattern="[0-9]*"
+           maxlength="12" autocomplete="off" placeholder="Somente números">
+    <div class="msg" id="msgMat" role="alert"></div>
+    <button class="btn" id="btnIniciar">INICIAR VOTAÇÃO</button>
+  </div>
+</main>
+
+<div class="foot">Sistema escolar de votação. Interface independente, sem vínculo com a Justiça Eleitoral.</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script src="js/state.js"></script>
+<script src="js/inicio.js"></script>
+</body>
+</html>
