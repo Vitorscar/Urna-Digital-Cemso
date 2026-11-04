@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — Urna Escolar</title>
+<link rel="stylesheet" href="css/urna.css">
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+<!-- TELA DE LOGIN -->
+<section id="telaLogin" class="login-wrap">
+  <div class="login-box">
+    <h1>Admin</h1>
+    <p class="sub">Acesso restrito à comissão eleitoral.</p>
+    <label for="email">E-mail</label>
+    <input type="email" id="email" placeholder="admin@escola.com" autocomplete="username">
+    <label for="senha" style="margin-top:12px">Senha</label>
+    <input type="password" id="senha" autocomplete="current-password">
+    <div class="msg" id="msgLogin" role="alert"></div>
+    <button class="btn" id="btnEntrar">ENTRAR</button>
+  </div>
+</section>
+
+<!-- DASHBOARD -->
+<section id="dashboard" class="dash" hidden>
+  <header class="dash-header">
+    <div><b>Painel Administrativo</b><br><span id="adminEmail"></span></div>
+    <button class="btn sec mini" id="btnSair">Sair</button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab ativo" data-tab="eleicao">Eleição</button>
+    <button class="tab" data-tab="chapas">Chapas</button>
+    <button class="tab" data-tab="eleitores">Eleitores</button>
+    <button class="tab" data-tab="apuracao">Apuração</button>
+  </nav>
+
+  <!-- ABA ELEIÇÃO -->
+  <section class="tab-panel ativo" id="tab-eleicao">
+    <div class="cards-row">
+      <div class="box">
+        <h2>Status da votação</h2>
+        <p class="status" id="statusEleicao">—</p>
+        <button class="btn" id="btnToggle">Alternar</button>
+      </div>
+      <div class="box">
+        <h2>Informações</h2>
+        <p><b>Nome:</b> <span id="infoNome">—</span></p>
+        <p><b>Ano:</b> <span id="infoAno">—</span></p>
+        <p><b>Dígitos:</b> <span id="infoDigitos">—</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABA CHAPAS -->
+  <section class="tab-panel" id="tab-chapas">
+    <div class="acoes">
+      <button class="btn mini" id="btnNovaChapa">+ Nova chapa</button>
+    </div>
+    <div class="tabela-wrap">
+      <table class="tabela">
+        <thead><tr>
+          <th>Nº</th><th>Nome</th><th>Candidato</th><th>Integrantes</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tblChapas"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ABA ELEITORES -->
+  <section class="tab-panel" id="tab-eleitores">
+    <div class="acoes">
+      <input type="text" id="buscaEleitor" placeholder="Buscar matrícula, nome ou turma…">
+      <button class="btn mini" id="btnNovoEleitor">+ Novo</button>
+      <button class="btn mini sec" id="btnImportar">Importar em massa</button>
+    </div>
+    <div class="tabela-wrap">
+      <table class="tabela">
+        <thead><tr>
+          <th>Matrícula</th><th>Nome</th><th>Turma</th><th>Votou</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tblEleitores"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ABA APURAÇÃO -->
+  <section class="tab-panel" id="tab-apuracao">
+    <div class="cards-row">
+      <div class="box"><h2>Total de votos</h2><p class="big" id="apTotal">—</p></div>
+      <div class="box"><h2>Brancos</h2><p class="big" id="apBrancos">—</p></div>
+      <div class="box"><h2>Comparecimento</h2><p class="big" id="apCompareceu">—</p></div>
+    </div>
+    <div class="box">
+      <h2>Votos por chapa</h2>
+      <div id="apChapas"></div>
+    </div>
+    <div class="box perigo">
+      <h2>Zona de perigo</h2>
+      <p>Apaga <b>todos os votos</b> e reseta a marcação de "votou" dos eleitores.</p>
+      <button class="btn warn" id="btnZerar">ZERAR TODOS OS VOTOS</button>
+    </div>
+  </section>
+</section>
+
+<!-- MODAL -->
+<div class="modal-bg" id="modal" hidden>
+  <div class="modal" id="modalBox">
+    <h2 id="modalTitulo"></h2>
+    <div id="modalCorpo"></div>
+    <div class="modal-acoes">
+      <button class="btn warn mini" id="modalCancelar">Cancelar</button>
+      <button class="btn mini" id="modalOk">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>
