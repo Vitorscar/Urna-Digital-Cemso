@@ -1,0 +1,144 @@
+/* ============================================================
+   APURAÇÃO — tela pública pós-encerramento
+   Carregar DEPOIS de urna.css
+   ============================================================ */
+
+.apu-wrap{max-width:760px; margin:0 auto}
+
+/* Bloqueio (votação ainda aberta) */
+.bloqueio{
+  background:var(--surf);
+  border:2px dashed var(--line);
+  border-radius:14px;
+  padding:40px 24px;
+  text-align:center;
+}
+.bloqueio h2{font-size:32px; margin-bottom:12px}
+.bloqueio p{color:var(--mut); margin:0}
+
+/* Card do vencedor */
+.vencedor{
+  background:linear-gradient(135deg,var(--acc),#ffcf3f);
+  color:#14213d;
+  border-radius:14px;
+  padding:24px;
+  text-align:center;
+  margin-bottom:20px;
+}
+.vencedor .label{
+  font:700 14px "Barlow Condensed",sans-serif;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  opacity:.75;
+}
+.vencedor .nome{
+  font:800 40px "Barlow Condensed",sans-serif;
+  line-height:1.1;
+  margin:6px 0;
+}
+.vencedor .num{
+  font:800 24px "Barlow Condensed",sans-serif;
+  opacity:.8;
+}
+
+/* Bloco de resultados */
+.resultado{
+  background:var(--surf);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:20px;
+  margin-bottom:16px;
+}
+.resultado h2{font-size:24px; margin-bottom:14px}
+
+/* Linhas do ranking */
+.linha{
+  display:grid;
+  grid-template-columns:48px 1fr auto;
+  gap:12px;
+  align-items:center;
+  margin:10px 0;
+}
+.linha .num{
+  font:800 24px "Barlow Condensed",sans-serif;
+  text-align:center;
+}
+.linha .barra-wrap{position:relative}
+.linha .nome{font-weight:700; margin-bottom:4px; font-size:15px}
+.linha .barra{
+  height:22px;
+  background:var(--line);
+  border-radius:11px;
+  overflow:hidden;
+}
+.linha .barra i{
+  display:block;
+  height:100%;
+  transition:width 1.2s cubic-bezier(.2,.7,.3,1);
+}
+.linha .votos{
+  font:800 24px "Barlow Condensed",sans-serif;
+  min-width:60px;
+  text-align:right;
+}
+.linha .pct{font-size:13px; color:var(--mut)}
+
+/* Stats */
+.stats{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  gap:12px;
+  margin-bottom:16px;
+}
+.stat{
+  background:var(--surf);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:14px;
+  text-align:center;
+}
+.stat .n{font:800 34px "Barlow Condensed",sans-serif; line-height:1}
+.stat .l{
+  font-size:12px;
+  color:var(--mut);
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  margin-top:4px;
+}
+
+.voltar-link{
+  display:inline-block;
+  margin-top:20px;
+  color:var(--mut);
+  font-size:14px;
+}
+
+/* ============================================================
+   BREAKPOINTS
+   ============================================================ */
+
+@media (max-width:600px){
+  .apu-wrap{padding:0}
+  .bloqueio{padding:28px 16px}
+  .bloqueio h2{font-size:24px}
+
+  .vencedor{padding:18px}
+  .vencedor .nome{font-size:28px}
+  .vencedor .num{font-size:20px}
+
+  .resultado{padding:16px}
+
+  .linha{grid-template-columns:36px 1fr auto; gap:8px}
+  .linha .num{font-size:20px}
+  .linha .votos{font-size:20px; min-width:auto}
+  .linha .barra{height:16px}
+  .linha .nome{font-size:14px}
+
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .stat .n{font-size:26px}
+}
+
+@media (max-width:360px){
+  .vencedor .nome{font-size:22px}
+  .stats{grid-template-columns:1fr}
+}

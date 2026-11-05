@@ -1,0 +1,303 @@
+/* ============================================================
+   ADMIN — login, dashboard, tabelas, modal
+   Carregar DEPOIS de urna.css
+   ============================================================ */
+/* Respeita [hidden] mesmo com classes que definem display */
+[hidden] { display: none !important; }
+/* ─── Login ─── */
+.login-wrap{
+  min-height:80vh;
+  min-height:80dvh;
+  display:grid;
+  place-items:center;
+  padding:20px;
+}
+.login-box{
+  background:var(--surf);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:28px;
+  max-width:420px;
+  width:100%;
+}
+.login-box h1{font-size:38px}
+.login-box .sub{margin-top:4px; margin-bottom:16px}
+.login-box label{display:block; margin-top:10px}
+
+/* Reset dos inputs da urna (matrícula) que vazam para o admin */
+.login-box input,
+.acoes input,
+.modal input,
+.modal textarea{
+  width:100%;
+  font:15px system-ui;
+  letter-spacing:0;
+  text-align:left;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--scr);
+  color:var(--ink);
+}
+.login-box input{padding:12px}
+
+/* ─── Dashboard ─── */
+.dash{max-width:1100px; margin:0 auto; padding:20px}
+.dash-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:16px;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.dash-header b{font:700 24px "Barlow Condensed",sans-serif}
+.dash-header span{color:var(--mut); font-size:14px}
+
+/* ─── Tabs ─── */
+.tabs{
+  display:flex;
+  gap:4px;
+  border-bottom:2px solid var(--line);
+  margin-bottom:20px;
+  overflow-x:auto;
+  scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
+}
+.tabs::-webkit-scrollbar{display:none}
+
+.tab{
+  background:none;
+  border:0;
+  padding:12px 18px;
+  font:700 16px "Barlow Condensed",sans-serif;
+  letter-spacing:.04em;
+  color:var(--mut);
+  cursor:pointer;
+  border-bottom:3px solid transparent;
+  margin-bottom:-2px;
+  white-space:nowrap;
+}
+.tab.ativo{color:var(--ink); border-bottom-color:var(--acc)}
+
+.tab-panel{display:none}
+.tab-panel.ativo{display:block; animation:in .2s ease}
+
+/* ─── Cards ─── */
+.cards-row{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:16px;
+  margin-bottom:16px;
+}
+.box{
+  background:var(--surf);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:18px;
+  margin-bottom:16px;
+}
+.box h2{font-size:20px; margin-bottom:12px}
+.box .big{font:800 44px "Barlow Condensed",sans-serif}
+.box.perigo{border-color:var(--err)}
+
+.status{font:800 28px "Barlow Condensed",sans-serif; color:var(--ok)}
+.status.fechada{color:var(--err)}
+
+/* ─── Ações ─── */
+.acoes{
+  display:flex;
+  gap:10px;
+  margin-bottom:14px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+.acoes input{flex:1; min-width:200px}
+
+.btn.mini{
+  font-size:16px;
+  padding:10px 16px;
+  width:auto;
+  margin-top:0;
+}
+
+/* ─── Tabelas ─── */
+.tabela-wrap{
+  overflow-x:auto;
+  background:var(--surf);
+  border:1px solid var(--line);
+  border-radius:12px;
+  -webkit-overflow-scrolling:touch;
+}
+.tabela{width:100%; border-collapse:collapse}
+.tabela th, .tabela td{
+  padding:10px 12px;
+  text-align:left;
+  border-bottom:1px solid var(--line);
+  font-size:15px;
+}
+.tabela th{
+  background:var(--scr);
+  font-weight:800;
+  font-size:13px;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.tabela tr:last-child td{border-bottom:0}
+.tabela td.acoes-cel{white-space:nowrap}
+.tabela td.acoes-cel button{
+  background:none;
+  border:1px solid var(--line);
+  border-radius:6px;
+  padding:4px 10px;
+  margin-right:4px;
+  cursor:pointer;
+  font-size:13px;
+  color:var(--ink);
+}
+.tabela td.acoes-cel button:hover{background:var(--scr)}
+
+.badge{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:10px;
+  font-size:12px;
+  font-weight:700;
+}
+.badge.ok{background:#1f8a4c22; color:var(--ok)}
+.badge.no{background:#c0392b22; color:var(--err)}
+
+/* ─── Barras de apuração (no admin) ─── */
+.chapa-barra{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin:8px 0;
+}
+.chapa-barra .num{
+  font:800 22px "Barlow Condensed",sans-serif;
+  width:40px;
+}
+.chapa-barra .nome{width:160px; font-weight:700}
+.chapa-barra .barra{
+  flex:1;
+  height:18px;
+  background:var(--line);
+  border-radius:9px;
+  overflow:hidden;
+}
+.chapa-barra .barra i{
+  display:block;
+  height:100%;
+  background:var(--acc);
+  transition:width .3s;
+}
+.chapa-barra .total{
+  font:800 20px "Barlow Condensed",sans-serif;
+  min-width:60px;
+  text-align:right;
+}
+
+/* ─── Modal ─── */
+.modal-bg{
+  position:fixed;
+  inset:0;
+  background:#000a;
+  display:grid;
+  place-items:center;
+  z-index:100;
+  padding:20px;
+}
+.modal{
+  background:var(--surf);
+  border-radius:14px;
+  padding:24px;
+  max-width:480px;
+  width:100%;
+  max-height:90vh;
+  max-height:90dvh;
+  overflow-y:auto;
+}
+.modal h2{font-size:26px; margin-bottom:16px}
+.modal label{display:block; margin-top:10px}
+.modal textarea{
+  min-height:80px;
+  font-family:monospace;
+  resize:vertical;
+}
+.modal-acoes{
+  display:flex;
+  gap:8px;
+  justify-content:flex-end;
+  margin-top:20px;
+}
+
+/* ============================================================
+   BREAKPOINTS ADMIN
+   ============================================================ */
+
+/* ─── Tablet (≤ 900px) ─── */
+@media (max-width:900px){
+  .dash{padding:16px}
+  .chapa-barra .nome{width:120px}
+}
+
+/* ─── Celular (≤ 640px) ─── */
+@media (max-width:640px){
+  .dash{padding:14px}
+  .dash-header{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:8px;
+  }
+  .dash-header button{margin-left:auto}
+
+  .acoes{flex-direction:column; align-items:stretch}
+  .acoes input{min-width:0}
+  .btn.mini{width:100%}
+
+  .tabela th, .tabela td{padding:8px 10px; font-size:13px}
+  .tabela th{font-size:11px}
+
+  .cards-row{grid-template-columns:1fr 1fr}
+  .box .big{font-size:34px}
+
+  /* Modal vira tela cheia em mobile */
+  .modal-bg{padding:0; align-items:stretch}
+  .modal{
+    max-width:100%;
+    border-radius:0;
+    max-height:100dvh;
+    height:100dvh;
+    padding:20px;
+  }
+
+  /* Chapa-barra: barra em linha própria */
+  .chapa-barra{
+    display:grid;
+    grid-template-columns:auto 1fr auto;
+    grid-template-areas:
+      "num nome total"
+      "barra barra barra";
+    gap:6px 10px;
+    align-items:center;
+  }
+  .chapa-barra .num{grid-area:num; width:auto; font-size:20px}
+  .chapa-barra .nome{grid-area:nome; width:auto; font-size:14px}
+  .chapa-barra .total{grid-area:total; font-size:20px; min-width:auto; text-align:right}
+  .chapa-barra .barra{grid-area:barra; height:12px}
+}
+
+/* ─── Celular pequeno (≤ 400px) ─── */
+@media (max-width:400px){
+  .cards-row{grid-template-columns:1fr}
+  .tab{padding:10px 12px; font-size:14px}
+  .login-box{padding:20px}
+}
+
+/* ─── Landscape curto ─── */
+@media (max-height:500px) and (orientation:landscape){
+  .login-wrap{min-height:100dvh; padding:12px}
+  .login-box{padding:16px; max-width:360px}
+  .modal{max-height:100dvh; height:100dvh}
+}
