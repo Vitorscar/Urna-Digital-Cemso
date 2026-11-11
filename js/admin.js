@@ -1,26 +1,75 @@
+/* ============================================================
+   admin.js — painel administrativo da urna
+   Requer: js/config.js (define `sb`) e migracao_turno.sql aplicada
+   ============================================================ */
+
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
-  (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 let eleicaoAtual = null;
+let eleitoresCache = [];
+let chapasCache = [];
+
+const MOTIVOS = {
+  nao_autorizado:      "Sem permissão. Faça login novamente.",
+  sem_eleicao:         "Nenhuma eleição cadastrada.",
+  numero_duplicado:    "Já existe uma chapa com esse número.",
+  matricula_duplicada: "Já existe um eleitor com essa matrícula.",
+  tem_votos:           "Essa chapa já recebeu votos e não pode ser excluída.",
+};
+
+const TURNOS = ["Matutino", "Vespertino", "Noturno"];
 
 /* ─────────────────────────────────────────────
-   HELPER: desabilita botão durante operação
-   Garante disabled=false mesmo se der exceção
+   HELPERS
    ───────────────────────────────────────────── */
-async function comBotao(btn, fn) {
-  if (!btn) return;
-  const original = btn.textContent;
-  btn.disabled = true;
+
+// Chama uma RPC e LANÇA erro em português se falhar (rede, SQL ou ok:false)
+async function rpc(nome, args) {
+  const { data, error } = await sb.rpc(nome, args);
+  if (error) throw new Error(error.message);
+  if (data && data.ok === false) throw new Error(MOTIVOS[data.motivo] || data.motivo || "erro desconhecido");
+  return data;
+}
+
+// Desabilita o botão durante a operação; mostra erro via alert; reabilita sempre
+async function acao(btn, fn) {
+  if (btn) btn.disabled = true;
   try {
     await fn();
+  } catch (e) {
+    console.error(e);
+    alert("Erro: " + (e.message || e));
   } finally {
-    btn.disabled = false;
-    // Se o fn não mudou o texto, restaura
-    if (btn.textContent === original || btn.textContent === "Aguarde…") {
-      btn.textContent = original;
-    }
+    if (btn) btn.disabled = false;
   }
+}
+
+function debounce(fn, ms = 300) {
+  let t;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+
+function selectTurno(valor) {
+  const v = valor || "";
+  const extra = v && !TURNOS.includes(v) ? `<option selected>${esc(v)}</option>` : "";
+  return `<select id="feTurno">
+    <option value="">— selecione —</option>
+    ${TURNOS.map(t => `<option${t === v ? " selected" : ""}>${t}</option>`).join("")}
+    ${extra}
+  </select>`;
+}
+
+// "M", "mat", "matutino" → "Matutino" etc. Outros valores ficam como vieram.
+function normalizarTurno(t) {
+  const s = String(t || "").trim();
+  if (!s) return "";
+  const c = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (c.startsWith("m")) return "Matutino";
+  if (c.startsWith("v")) return "Vespertino";
+  if (c.startsWith("n")) return "Noturno";
+  return s;
 }
 
 /* ─────────────────────────────────────────────
@@ -51,16 +100,8 @@ async function entrar() {
 
   msg.className = "msg"; msg.textContent = "";
 
-  if (!sb) {
-    msg.textContent = "Supabase não configurado.";
-    msg.classList.add("err");
-    return;
-  }
-  if (!email || !senha) {
-    msg.textContent = "Preencha e-mail e senha.";
-    msg.classList.add("err");
-    return;
-  }
+  if (!sb) { msg.textContent = "Supabase não configurado."; msg.classList.add("err"); return; }
+  if (!email || !senha) { msg.textContent = "Preencha e-mail e senha."; msg.classList.add("err"); return; }
 
   btn.disabled = true;
   msg.textContent = "Entrando…";
@@ -71,13 +112,14 @@ async function entrar() {
       msg.classList.add("err");
       return;
     }
+    msg.textContent = "";
     mostrarDashboard(data.user.email);
   } catch (e) {
     console.error("entrar:", e);
     msg.textContent = "Erro de conexão. Verifique a URL do Supabase.";
     msg.classList.add("err");
   } finally {
-    btn.disabled = false;   // ← GARANTIDO
+    btn.disabled = false;
   }
 }
 
@@ -110,7 +152,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     tab.classList.add("ativo");
     $(`tab-${tab.dataset.tab}`).classList.add("ativo");
     if (tab.dataset.tab === "chapas")    carregarChapas();
-    if (tab.dataset.tab === "eleitores") carregarEleitores();
+    if (tab.dataset.tab === "eleitores") carregarEleitores($("buscaEleitor").value.trim());
     if (tab.dataset.tab === "apuracao")  carregarApuracao();
   };
 });
@@ -120,14 +162,7 @@ document.querySelectorAll(".tab").forEach(tab => {
    ───────────────────────────────────────────── */
 async function carregarEleicao() {
   try {
-    const { data, error } = await sb.rpc("admin_eleicao_atual");
-    if (error || !data?.ok) {
-      console.error("carregarEleicao:", error || data);
-      $("statusEleicao").textContent = "Erro ao carregar";
-      $("statusEleicao").className = "status fechada";
-      $("btnToggle").disabled = true;
-      return;
-    }
+    const data = await rpc("admin_eleicao_atual");
     eleicaoAtual = data.eleicao;
     $("infoNome").textContent = eleicaoAtual.nome;
     $("infoAno").textContent = eleicaoAtual.ano;
@@ -143,63 +178,55 @@ async function carregarEleicao() {
     btn.className = "btn" + (eleicaoAtual.aberta ? " warn" : "");
   } catch (e) {
     console.error("carregarEleicao:", e);
-    $("statusEleicao").textContent = "Erro";
+    $("statusEleicao").textContent = "Erro ao carregar";
     $("statusEleicao").className = "status fechada";
     $("btnToggle").disabled = true;
   }
 }
 
-$("btnToggle").onclick = async () => {
-  if (!eleicaoAtual) {
-    alert("Eleição ainda não carregada. Aguarde ou recarregue a página.");
-    return;
-  }
-  const btn = $("btnToggle");
-  btn.disabled = true;
-  try {
-    const { data, error } = await sb.rpc("admin_toggle_eleicao", {
-      p_aberta: !eleicaoAtual.aberta,
-    });
-    if (error || !data?.ok) {
-      alert("Erro: " + (error?.message || data?.motivo || "desconhecido"));
-      return;
-    }
-    await carregarEleicao();
-  } catch (e) {
-    console.error("btnToggle:", e);
-    alert("Erro de conexão. Tente novamente.");
-  } finally {
-    btn.disabled = false;
-  }
-};
+$("btnToggle").onclick = () => acao($("btnToggle"), async () => {
+  if (!eleicaoAtual) { alert("Eleição ainda não carregada. Recarregue a página."); return; }
+  await rpc("admin_toggle_eleicao", { p_aberta: !eleicaoAtual.aberta });
+  await carregarEleicao();
+});
 
 /* ─────────────────────────────────────────────
    ABA CHAPAS
    ───────────────────────────────────────────── */
 async function carregarChapas() {
   try {
-    const { data, error } = await sb.rpc("urn_dados_iniciais");
-    if (error) { console.error(error); return; }
-    const chapas = data?.chapas || [];
-    $("tblChapas").innerHTML = chapas.length === 0
+    const data = await rpc("admin_listar_chapas");
+    chapasCache = data.chapas || [];
+    $("tblChapas").innerHTML = chapasCache.length === 0
       ? `<tr><td colspan="5" style="text-align:center;color:var(--mut)">Nenhuma chapa cadastrada.</td></tr>`
-      : chapas.map(c => `
+      : chapasCache.map(c => `
         <tr>
           <td><b>${esc(c.numero)}</b></td>
           <td>${esc(c.nome)}</td>
           <td>${esc(c.candidato)}</td>
-          <td>${esc((c.integrantes || []).join(", "))}</td>
+          <td>${esc((Array.isArray(c.integrantes) ? c.integrantes : []).join(", "))}</td>
           <td class="acoes-cel">
-            <button onclick="editarChapa(${c.id})">Editar</button>
-            <button onclick="excluirChapa(${c.id})">Excluir</button>
+            <button data-acao="editar" data-id="${c.id}">Editar</button>
+            <button data-acao="excluir" data-id="${c.id}">Excluir</button>
           </td>
         </tr>`).join("");
   } catch (e) {
     console.error("carregarChapas:", e);
     $("tblChapas").innerHTML =
-      `<tr><td colspan="5" style="text-align:center;color:var(--err)">Erro ao carregar.</td></tr>`;
+      `<tr><td colspan="5" style="text-align:center;color:var(--err)">Erro ao carregar: ${esc(e.message)}</td></tr>`;
   }
 }
+
+$("tblChapas").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-acao]");
+  if (!b) return;
+  const id = Number(b.dataset.id);
+  if (b.dataset.acao === "editar") {
+    const c = chapasCache.find(x => x.id === id);
+    c ? abrirModalChapa(c) : alert("Chapa não encontrada. Recarregue a lista.");
+  }
+  if (b.dataset.acao === "excluir") excluirChapa(b, id);
+});
 
 $("btnNovaChapa").onclick = () => abrirModalChapa(null);
 
@@ -208,139 +235,107 @@ function abrirModalChapa(chapa) {
   $("modalTitulo").textContent = editando ? "Editar chapa" : "Nova chapa";
   $("modalCorpo").innerHTML = `
     <label>Número</label>
-    <input id="fcNumero" maxlength="4" value="${esc(chapa?.numero || '')}">
+    <input id="fcNumero" maxlength="4" value="${esc(chapa?.numero || "")}">
     <label>Nome da chapa</label>
-    <input id="fcNome" value="${esc(chapa?.nome || '')}">
+    <input id="fcNome" value="${esc(chapa?.nome || "")}">
     <label>Candidato(a)</label>
-    <input id="fcCandidato" value="${esc(chapa?.candidato || '')}">
+    <input id="fcCandidato" value="${esc(chapa?.candidato || "")}">
     <label>Integrantes (separados por vírgula)</label>
-    <input id="fcIntegrantes" value="${esc((chapa?.integrantes || []).join(', '))}">
+    <input id="fcIntegrantes" value="${esc((Array.isArray(chapa?.integrantes) ? chapa.integrantes : []).join(", "))}">
     <label>Proposta (opcional)</label>
-    <textarea id="fcInfo">${esc(chapa?.info || '')}</textarea>
+    <textarea id="fcInfo">${esc(chapa?.info || "")}</textarea>
     <label>Cor (hex)</label>
-    <input id="fcCor" value="${esc(chapa?.cor || '#1d4ed8')}">
+    <input id="fcCor" value="${esc(chapa?.cor || "#1d4ed8")}">
   `;
-  $("modalOk").onclick = () => editando ? salvarEdicaoChapa(chapa.id) : salvarNovaChapa();
+  $("modalOk").onclick = () => salvarChapa(chapa?.id ?? null);
   abrirModal();
 }
 
-async function salvarNovaChapa() {
-  const btn = $("modalOk");
-  btn.disabled = true;
-  try {
-    const integ = $("fcIntegrantes").value.split(",").map(s => s.trim()).filter(Boolean);
-    const { data, error } = await sb.rpc("admin_criar_chapa", {
-      p_numero:     $("fcNumero").value.trim(),
-      p_nome:       $("fcNome").value.trim(),
-      p_candidato:  $("fcCandidato").value.trim(),
-      p_integrantes: integ,
-      p_info:       $("fcInfo").value.trim(),
-      p_cor:        $("fcCor").value.trim(),
-    });
-    if (error || !data?.ok) {
-      alert("Erro: " + (error?.message || data?.motivo || "desconhecido"));
-      return;
-    }
-    fecharModal();
-    await carregarChapas();
-  } catch (e) {
-    console.error(e);
-    alert("Erro inesperado: " + (e.message || e));
-  } finally {
-    btn.disabled = false;
-  }
+function lerFormChapa() {
+  const f = {
+    numero:    $("fcNumero").value.trim(),
+    nome:      $("fcNome").value.trim(),
+    candidato: $("fcCandidato").value.trim(),
+    integ:     $("fcIntegrantes").value.split(",").map(s => s.trim()).filter(Boolean),
+    info:      $("fcInfo").value.trim(),
+    cor:       $("fcCor").value.trim() || "#1d4ed8",
+  };
+  if (!f.numero || !f.nome || !f.candidato) throw new Error("Preencha número, nome e candidato.");
+  if (!/^\d+$/.test(f.numero)) throw new Error("O número da chapa deve conter apenas dígitos.");
+  if (!/^#[0-9a-fA-F]{6}$/.test(f.cor)) throw new Error("Cor inválida. Use o formato #RRGGBB.");
+  return f;
 }
 
-async function salvarEdicaoChapa(id) {
-  const btn = $("modalOk");
-  btn.disabled = true;
-  try {
-    const integ = $("fcIntegrantes").value.split(",").map(s => s.trim()).filter(Boolean);
-    const { data, error } = await sb.rpc("admin_atualizar_chapa", {
-      p_id: id,
-      p_numero:     $("fcNumero").value.trim(),
-      p_nome:       $("fcNome").value.trim(),
-      p_candidato:  $("fcCandidato").value.trim(),
-      p_integrantes: integ,
-      p_info:       $("fcInfo").value.trim(),
-      p_cor:        $("fcCor").value.trim(),
-    });
-    if (error || !data?.ok) {
-      alert("Erro: " + (error?.message || data?.motivo || "desconhecido"));
-      return;
-    }
+function salvarChapa(id) {
+  return acao($("modalOk"), async () => {
+    const f = lerFormChapa();
+    const args = {
+      p_numero: f.numero, p_nome: f.nome, p_candidato: f.candidato,
+      p_integrantes: f.integ, p_info: f.info, p_cor: f.cor,
+    };
+    if (id == null) await rpc("admin_criar_chapa", args);
+    else            await rpc("admin_atualizar_chapa", { p_id: id, ...args });
     fecharModal();
     await carregarChapas();
-  } catch (e) {
-    console.error(e);
-    alert("Erro inesperado: " + (e.message || e));
-  } finally {
-    btn.disabled = false;
-  }
+  });
 }
 
-window.editarChapa = async (id) => {
-  try {
-    const { data, error } = await sb.rpc("urn_dados_iniciais");
-    if (error) { alert("Erro ao carregar: " + error.message); return; }
-    const c = (data?.chapas || []).find(x => x.id === id);
-    if (c) abrirModalChapa(c);
-    else alert("Chapa não encontrada.");
-  } catch (e) {
-    console.error(e);
-    alert("Erro: " + (e.message || e));
-  }
-};
-
-window.excluirChapa = async (id) => {
+function excluirChapa(btn, id) {
   if (!confirm("Excluir esta chapa?")) return;
-  try {
-    const { data, error } = await sb.rpc("admin_excluir_chapa", { p_id: id });
-    if (error || !data?.ok) {
-      alert("Não é possível excluir: " + (error?.message || data?.motivo || "erro"));
-      return;
-    }
+  acao(btn, async () => {
+    await rpc("admin_excluir_chapa", { p_id: id });
     await carregarChapas();
-  } catch (e) {
-    console.error(e);
-    alert("Erro: " + (e.message || e));
-  }
-};
+  });
+}
 
 /* ─────────────────────────────────────────────
-   ABA ELEITORES
+   ABA ELEITORES  (matrícula, nome, turma, turno)
    ───────────────────────────────────────────── */
-let eleitoresCache = [];
-
 async function carregarEleitores(busca = "") {
   try {
-    const { data, error } = await sb.rpc("admin_listar_eleitores", { p_busca: busca });
-    if (error || !data?.ok) {
-      console.error("carregarEleitores:", error || data);
-      return;
-    }
+    const data = await rpc("admin_listar_eleitores", { p_busca: busca });
     eleitoresCache = data.eleitores || [];
-    $("tblEleitores").innerHTML = eleitoresCache.length === 0
-      ? `<tr><td colspan="5" style="text-align:center;color:var(--mut)">Nenhum eleitor.</td></tr>`
+    const total = Number(data.total || 0);
+
+    let html = eleitoresCache.length === 0
+      ? `<tr><td colspan="6" style="text-align:center;color:var(--mut)">Nenhum eleitor.</td></tr>`
       : eleitoresCache.map(e => `
         <tr>
           <td><b>${esc(e.matricula)}</b></td>
           <td>${esc(e.nome)}</td>
           <td>${esc(e.turma)}</td>
+          <td>${esc(e.turno)}</td>
           <td>${e.votou
             ? '<span class="badge ok">Sim</span>'
             : '<span class="badge no">Não</span>'}</td>
           <td class="acoes-cel">
-            ${e.votou ? `<button onclick="desmarcarVoto(${e.id})">Desmarcar</button>` : ""}
-            <button onclick="excluirEleitor(${e.id})">Excluir</button>
+            ${e.votou ? `<button data-acao="desmarcar" data-id="${e.id}">Desmarcar</button>` : ""}
+            <button data-acao="excluir" data-id="${e.id}">Excluir</button>
           </td>
         </tr>`).join("");
+
+    if (total > eleitoresCache.length) {
+      html += `<tr><td colspan="6" style="text-align:center;color:var(--mut)">
+        Mostrando ${eleitoresCache.length} de ${total}. Use a busca para filtrar.</td></tr>`;
+    }
+    $("tblEleitores").innerHTML = html;
   } catch (e) {
     console.error("carregarEleitores:", e);
+    $("tblEleitores").innerHTML =
+      `<tr><td colspan="6" style="text-align:center;color:var(--err)">Erro ao carregar: ${esc(e.message)}</td></tr>`;
   }
 }
 
-$("buscaEleitor").addEventListener("input", e => carregarEleitores(e.target.value.trim()));
+$("buscaEleitor").addEventListener("input",
+  debounce(e => carregarEleitores(e.target.value.trim())));
+
+$("tblEleitores").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-acao]");
+  if (!b) return;
+  const id = Number(b.dataset.id);
+  if (b.dataset.acao === "desmarcar") desmarcarVoto(b, id);
+  if (b.dataset.acao === "excluir")   excluirEleitor(b, id);
+});
 
 $("btnNovoEleitor").onclick = () => {
   $("modalTitulo").textContent = "Novo eleitor";
@@ -348,114 +343,198 @@ $("btnNovoEleitor").onclick = () => {
     <label>Matrícula</label><input id="feMat" maxlength="20">
     <label>Nome</label><input id="feNome">
     <label>Turma</label><input id="feTurma" placeholder="ex.: 3º Ano A">
+    <label>Turno</label>${selectTurno("")}
   `;
   $("modalOk").onclick = salvarNovoEleitor;
   abrirModal();
 };
 
-async function salvarNovoEleitor() {
-  const btn = $("modalOk");
-  btn.disabled = true;
-  try {
-    const { data, error } = await sb.rpc("admin_criar_eleitor", {
-      p_matricula: $("feMat").value.trim(),
-      p_nome:      $("feNome").value.trim(),
+function salvarNovoEleitor() {
+  return acao($("modalOk"), async () => {
+    const mat = $("feMat").value.trim();
+    const nome = $("feNome").value.trim();
+    if (!mat || !nome) throw new Error("Preencha matrícula e nome.");
+    await rpc("admin_criar_eleitor", {
+      p_matricula: mat,
+      p_nome:      nome,
       p_turma:     $("feTurma").value.trim(),
+      p_turno:     $("feTurno").value,
     });
-    if (error || !data?.ok) {
-      alert("Erro: " + (error?.message || data?.motivo || "desconhecido"));
-      return;
-    }
     fecharModal();
-    await carregarEleitores();
-  } catch (e) {
-    console.error(e);
-    alert("Erro: " + (e.message || e));
-  } finally {
-    btn.disabled = false;
+    await carregarEleitores($("buscaEleitor").value.trim());
+  });
+}
+
+function desmarcarVoto(btn, id) {
+  if (!confirm("Desmarcar 'votou' deste eleitor? O voto continua contado na apuração.")) return;
+  acao(btn, async () => {
+    await rpc("admin_desmarcar_voto", { p_id: id });
+    await carregarEleitores($("buscaEleitor").value.trim());
+  });
+}
+
+function excluirEleitor(btn, id) {
+  if (!confirm("Excluir este eleitor?")) return;
+  acao(btn, async () => {
+    await rpc("admin_excluir_eleitor", { p_id: id });
+    await carregarEleitores($("buscaEleitor").value.trim());
+  });
+}
+
+/* ─────────────────────────────────────────────
+   IMPORTAÇÃO EM MASSA
+   Colunas: matrícula, nome, turma, turno
+   Aceita: .xlsx, .xls, .csv, .txt ou colagem do Excel
+   ───────────────────────────────────────────── */
+const SHEETJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+
+function carregarSheetJS() {
+  if (window.XLSX) return Promise.resolve();
+  return new Promise((ok, falha) => {
+    const s = document.createElement("script");
+    s.src = SHEETJS_URL;
+    s.onload = ok;
+    s.onerror = () => falha(new Error("Não foi possível carregar o leitor de Excel. Salve como .csv e tente de novo."));
+    document.head.appendChild(s);
+  });
+}
+
+// Divide uma linha respeitando aspas ("Silva, João";3A)
+function dividirLinha(linha, sep) {
+  const out = []; let cur = ""; let aspas = false;
+  for (let i = 0; i < linha.length; i++) {
+    const ch = linha[i];
+    if (ch === '"') {
+      if (aspas && linha[i + 1] === '"') { cur += '"'; i++; }
+      else aspas = !aspas;
+    } else if (ch === sep && !aspas) { out.push(cur); cur = ""; }
+    else cur += ch;
   }
+  out.push(cur);
+  return out.map(s => s.trim());
+}
+
+// Texto → lista de {matricula, nome, turma, turno}
+function parseEleitores(texto) {
+  const linhas = texto.split(/\r?\n/).filter(l => l.trim());
+  if (!linhas.length) return [];
+  const p = linhas[0];
+  const sep = p.includes("\t") ? "\t" : p.includes(";") ? ";" : ",";
+  const rows = linhas.map(l => dividirLinha(l, sep));
+
+  // Mapa de colunas: por cabeçalho (se houver) ou por posição
+  let idx = { matricula: 0, nome: 1, turma: 2, turno: 3 };
+  if (rows[0].some(c => /matr[ií]cula/i.test(c))) {
+    const h = rows.shift();
+    const achar = (re, padrao) => { const i = h.findIndex(c => re.test(c)); return i >= 0 ? i : padrao; };
+    idx = {
+      matricula: achar(/matr[ií]cula/i, 0),
+      nome:      achar(/nome/i, 1),
+      turma:     achar(/turma|s[eé]rie/i, 2),
+      turno:     achar(/turno/i, 3),
+    };
+  }
+  return rows
+    .map(r => ({
+      matricula: (r[idx.matricula] || "").trim(),
+      nome:      (r[idx.nome] || "").trim(),
+      turma:     (r[idx.turma] || "").trim(),
+      turno:     normalizarTurno(r[idx.turno]),
+    }))
+    .filter(x => x.matricula && x.nome);
+}
+
+function atualizarPrevia() {
+  const n = parseEleitores($("fiTexto").value).length;
+  $("fiProgresso").textContent = n ? `${n} eleitor(es) válidos detectados.` : "";
 }
 
 $("btnImportar").onclick = () => {
   $("modalTitulo").textContent = "Importar eleitores";
   $("modalCorpo").innerHTML = `
     <p style="color:var(--mut);margin-bottom:8px">
-      Cole uma linha por eleitor: <code>matricula, nome, turma</code>
+      Colunas: <code>matrícula, nome, turma, turno</code>.<br>
+      Envie um arquivo <b>.xlsx</b> / <b>.csv</b> ou cole as células copiadas do Excel.
+      Se a primeira linha tiver cabeçalho, ela é reconhecida automaticamente.
     </p>
-    <textarea id="fiTexto" style="min-height:200px"></textarea>
+    <input type="file" id="fiArquivo" accept=".xlsx,.xls,.csv,.txt">
+    <textarea id="fiTexto" style="min-height:160px;margin-top:8px"></textarea>
+    <p id="fiProgresso" style="color:var(--mut)"></p>
   `;
+  $("fiTexto").addEventListener("input", debounce(atualizarPrevia, 400));
+
+  $("fiArquivo").onchange = async (ev) => {
+    const f = ev.target.files[0];
+    if (!f) return;
+    try {
+      $("fiProgresso").textContent = "Lendo arquivo…";
+      if (/\.xlsx?$/i.test(f.name)) {
+        await carregarSheetJS();
+        const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        // raw:false = texto como aparece na célula (preserva zeros à esquerda formatados)
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
+        $("fiTexto").value = rows.map(r => r.join("\t")).join("\n");
+      } else {
+        const buf = await f.arrayBuffer();
+        let txt;
+        try { txt = new TextDecoder("utf-8", { fatal: true }).decode(buf); }
+        catch { txt = new TextDecoder("windows-1252").decode(buf); } // CSV antigo do Excel
+        $("fiTexto").value = txt.replace(/^\uFEFF/, "");
+      }
+      atualizarPrevia();
+    } catch (e) {
+      console.error(e);
+      $("fiProgresso").textContent = "";
+      alert("Erro ao ler o arquivo: " + (e.message || e));
+    }
+  };
+
   $("modalOk").onclick = importarEleitores;
   abrirModal();
 };
 
-async function importarEleitores() {
-  const btn = $("modalOk");
-  btn.disabled = true;
-  try {
-    const linhas = $("fiTexto").value.split("\n").map(l => l.trim()).filter(Boolean);
-    const lista = linhas.map(l => {
-      const [matricula, nome, turma] = l.split(",").map(s => s.trim());
-      return { matricula, nome, turma: turma || "" };
-    }).filter(x => x.matricula && x.nome);
+function importarEleitores() {
+  return acao($("modalOk"), async () => {
+    const lista = parseEleitores($("fiTexto").value);
+    if (!lista.length) throw new Error("Nenhuma linha válida (matrícula e nome são obrigatórios).");
 
-    if (lista.length === 0) { alert("Nenhuma linha válida."); return; }
-
-    const { data, error } = await sb.rpc("admin_importar_eleitores", { p_lista: lista });
-    if (error || !data?.ok) {
-      alert("Erro: " + (error?.message || data?.motivo || "desconhecido"));
-      return;
+    let ins = 0, ign = 0;
+    const LOTE = 1000;
+    for (let i = 0; i < lista.length; i += LOTE) {
+      $("fiProgresso").textContent = `Enviando ${Math.min(i + LOTE, lista.length)} / ${lista.length}…`;
+      try {
+        const d = await rpc("admin_importar_eleitores", { p_lista: lista.slice(i, i + LOTE) });
+        ins += d.inseridos; ign += d.ignorados;
+      } catch (e) {
+        throw new Error(`Falha no lote ${i / LOTE + 1} (já inseridos até aqui: ${ins}). ${e.message}`);
+      }
     }
-    alert(`Importados: ${data.inseridos}. Ignorados (já existiam): ${data.ignorados}.`);
+    alert(`Importados: ${ins}.\nIgnorados (matrícula já existia ou duplicada no arquivo): ${ign}.`);
     fecharModal();
     await carregarEleitores();
-  } catch (e) {
-    console.error(e);
-    alert("Erro: " + (e.message || e));
-  } finally {
-    btn.disabled = false;
-  }
+  });
 }
-
-window.desmarcarVoto = async (id) => {
-  if (!confirm("Desmarcar 'votou' deste eleitor? O voto continua contado na apuração.")) return;
-  try {
-    const { data, error } = await sb.rpc("admin_desmarcar_voto", { p_id: id });
-    if (error || !data?.ok) { alert("Erro ao desmarcar."); return; }
-    await carregarEleitores($("buscaEleitor").value.trim());
-  } catch (e) { console.error(e); alert("Erro: " + (e.message || e)); }
-};
-
-window.excluirEleitor = async (id) => {
-  if (!confirm("Excluir este eleitor?")) return;
-  try {
-    const { data, error } = await sb.rpc("admin_excluir_eleitor", { p_id: id });
-    if (error || !data?.ok) { alert("Erro ao excluir."); return; }
-    await carregarEleitores($("buscaEleitor").value.trim());
-  } catch (e) { console.error(e); alert("Erro: " + (e.message || e)); }
-};
 
 /* ─────────────────────────────────────────────
    ABA APURAÇÃO
    ───────────────────────────────────────────── */
 async function carregarApuracao() {
   try {
-    const { data, error } = await sb.rpc("admin_apuracao_detalhada");
-    if (error || !data?.ok) {
-      console.error("carregarApuracao:", error || data);
-      return;
-    }
+    const data = await rpc("admin_apuracao_detalhada");
     $("apTotal").textContent      = data.total_votos || 0;
     $("apBrancos").textContent    = data.brancos || 0;
     $("apCompareceu").textContent = `${data.compareceram || 0} / ${data.total_eleitores || 0}`;
 
-    const max = Math.max(1, ...(data.chapas || []).map(c => Number(c.total)));
-    $("apChapas").innerHTML = (data.chapas || []).map(c => {
+    const chapas = data.chapas || [];
+    const max = Math.max(1, ...chapas.map(c => Number(c.total)));
+    $("apChapas").innerHTML = chapas.map(c => {
       const pct = (Number(c.total) / max) * 100;
       return `<div class="chapa-barra">
         <span class="num">${esc(c.numero)}</span>
         <span class="nome">${esc(c.nome)}</span>
         <div class="barra"><i style="width:${pct}%"></i></div>
-        <span class="total">${c.total}</span>
+        <span class="total">${esc(c.total)}</span>
       </div>`;
     }).join("") || `<p style="color:var(--mut)">Sem votos registrados.</p>`;
   } catch (e) {
@@ -463,26 +542,14 @@ async function carregarApuracao() {
   }
 }
 
-$("btnZerar").onclick = async () => {
+$("btnZerar").onclick = () => {
   if (!confirm("⚠ Isso apaga TODOS os votos e reseta 'votou'. Continuar?")) return;
   if (!confirm("Confirma MESMO? Não tem como desfazer.")) return;
-
-  const btn = $("btnZerar");
-  btn.disabled = true;
-  try {
-    const { data, error } = await sb.rpc("admin_zerar_votos");
-    if (error || !data?.ok) {
-      alert("Erro ao zerar: " + (error?.message || data?.motivo || "desconhecido"));
-      return;
-    }
+  acao($("btnZerar"), async () => {
+    await rpc("admin_zerar_votos");
     alert("Votos zerados.");
     await carregarApuracao();
-  } catch (e) {
-    console.error(e);
-    alert("Erro: " + (e.message || e));
-  } finally {
-    btn.disabled = false;
-  }
+  });
 };
 
 /* ─────────────────────────────────────────────
