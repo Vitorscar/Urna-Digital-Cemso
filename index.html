@@ -2,29 +2,46 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Urna Digital Escolar</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#14213d">
+<meta name="robots" content="noindex">
+<title>Urna Digital Escolar</title>
 <link rel="stylesheet" href="css/urna.css">
+<link rel="stylesheet" href="css/urna-membros.css">
 </head>
 <body>
+
 <header>
   <div>
-    <b id="escola">Carregando…</b><br>
+    <b id="escola">Urna Digital Escolar</b><br>
     <span>Eleição do Grêmio Estudantil <span id="ano"></span></span>
   </div>
   <span>Sessão de votação</span>
 </header>
 
 <main>
+  <noscript>
+    <p class="msg err">Ative o JavaScript do navegador para votar.</p>
+  </noscript>
+
   <h1 class="title">ELEIÇÃO DO GRÊMIO ESTUDANTIL</h1>
   <p class="sub">Conheça as chapas, digite sua matrícula e vote com segurança.</p>
-  <div class="chapas" id="listaChapas"></div>
-  <div class="login">
+
+  <section aria-label="Chapas candidatas">
+    <div class="chapas" id="listaChapas" aria-live="polite">
+      <p class="sub">Carregando chapas…</p>
+    </div>
+  </section>
+
+  <section class="login" aria-label="Início da votação">
     <label for="mat">Sua matrícula</label>
     <input type="text" id="mat" inputmode="numeric" pattern="[0-9]*"
-           maxlength="12" autocomplete="off" placeholder="Somente números">
+           maxlength="12" autocomplete="off" autocapitalize="off"
+           spellcheck="false" enterkeyhint="go" placeholder="Somente números">
     <div class="msg" id="msgMat" role="alert"></div>
-    <button class="btn" id="btnIniciar">INICIAR VOTAÇÃO</button>
-  </div>
+    <button type="button" class="btn" id="btnIniciar">INICIAR VOTAÇÃO</button>
+  </section>
 </main>
 
 <div class="foot">Sistema escolar de votação. Interface independente, sem vínculo com a Justiça Eleitoral.</div>
@@ -32,6 +49,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/config.js"></script>
 <script src="js/state.js"></script>
+<script src="js/chapa-view.js"></script>
 <script src="js/inicio.js"></script>
 </body>
 </html>

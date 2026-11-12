@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
-  (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 const CONFIG = State.get("config");
 if (!State.get("matricula") || !CONFIG) { window.location.href = "index.html"; }
@@ -9,10 +9,7 @@ let CHAPAS = [];
 let digitos = "";
 let chapaSel = null;
 let branco = false;
-
-const bannerHTML = (c) => `<div class="banner" style="background-image:${
-  c.foto ? `url('${esc(c.foto)}')` : `linear-gradient(135deg,${esc(c.cor)},#14213d)`
-}"><span class="n">${esc(c.numero)}</span></div>`;
+let erroCarga = "";   // mensagem exibida no lugar da chapa se o carregamento falhar
 
 async function init() {
   $("escola").textContent = CONFIG.escola;
@@ -21,23 +18,32 @@ async function init() {
   montarTeclado();
 
   if (sb) {
-    const { data, error } = await sb.rpc("urn_dados_iniciais");
-    if (!error) CHAPAS = data.chapas || [];
-  }
-  if (CHAPAS.length === 0) {
+    try {
+      const { data, error } = await sb.rpc("urn_dados_iniciais");
+      if (error || !data) erroCarga = "Não foi possível carregar as chapas. Recarregue a página.";
+      else if (!data.eleicao) erroCarga = "A votação não está aberta.";
+      else CHAPAS = data.chapas || [];
+    } catch (e) {
+      console.error("urn_dados_iniciais:", e);
+      erroCarga = "Sem conexão. Recarregue a página.";
+    }
+  } else {
+    // Modo demonstração: só quando o Supabase NÃO está configurado
     CHAPAS = [
-      {numero:"11",nome:"Voz Ativa",candidato:"Ana",integrantes:["A","B"],info:"",foto:"",cor:"#1d4ed8"},
-      {numero:"22",nome:"Novo Horizonte",candidato:"Rafael",integrantes:["C"],info:"",foto:"",cor:"#0f766e"},
-      {numero:"33",nome:"União Estudantil",candidato:"Camila",integrantes:["D"],info:"",foto:"",cor:"#9333ea"},
+      { numero: "11", nome: "Voz Ativa", candidato: "Ana", integrantes: ["A", "B"], info: "", cor: "#1d4ed8" },
+      { numero: "22", nome: "Novo Horizonte", candidato: "Rafael", integrantes: ["C"], info: "", cor: "#0f766e" },
+      { numero: "33", nome: "União Estudantil", candidato: "Camila", integrantes: ["D"], info: "", cor: "#9333ea" },
     ];
   }
   render();
 }
 
 function montarTeclado() {
-  const t = $("teclado"); t.innerHTML = "";
-  [1,2,3,4,5,6,7,8,9,0].forEach(n => {
+  const t = $("teclado");
+  t.innerHTML = "";
+  [1, 2, 3, 4, 5, 6, 7, 8, 9, 0].forEach(n => {
     const b = document.createElement("button");
+    b.type = "button";
     b.className = "k" + (n === 0 ? " z" : "");
     b.textContent = n;
     b.setAttribute("aria-label", "Número " + n);
@@ -69,21 +75,30 @@ function render() {
   $("digits").innerHTML = h;
 
   const v = $("chapaView"), ok = $("kConfirma");
-  if (branco) { v.innerHTML = `<div class="hint">VOTO EM BRANCO</div>`; ok.disabled = false; return; }
-  if (digitos.length < CONFIG.digitos) { v.innerHTML = `<div class="hint">DIGITE O NÚMERO DA CHAPA</div>`; ok.disabled = true; return; }
+
+  if (erroCarga) {
+    v.innerHTML = `<div class="hint" style="color:var(--err)">${esc(erroCarga)}</div>`;
+    ok.disabled = true;
+    return;
+  }
+  if (branco) {
+    v.innerHTML = `<div class="hint">VOTO EM BRANCO</div>`;
+    ok.disabled = false;
+    return;
+  }
+  if (digitos.length < CONFIG.digitos) {
+    v.innerHTML = `<div class="hint">DIGITE O NÚMERO DA CHAPA</div>`;
+    ok.disabled = true;
+    return;
+  }
   if (!chapaSel) {
     v.innerHTML = `<div class="hint" style="color:var(--err)">NÚMERO INVÁLIDO<br><small style="font-size:18px">Nenhuma chapa com este número. Pressione CORRIGE.</small></div>`;
-    ok.disabled = true; return;
+    ok.disabled = true;
+    return;
   }
-  const c = chapaSel;
-  v.innerHTML = `<div class="detail">${bannerHTML(c)}
-    <div class="info">
-      <div class="tag">Chapa</div>
-      <h2>${esc(c.nome)}</h2>
-      <p><b>Candidato:</b> ${esc(c.candidato)}</p>
-      <p><b>Integrantes:</b> ${esc((c.integrantes||[]).join(", "))}</p>
-      <p class="tag">${esc(c.info)}</p>
-    </div></div>`;
+
+  // Ficha da chapa: presidente + integrantes em mini blocos (js/chapa-view.js)
+  v.innerHTML = renderChapaDetalhe(chapaSel);
   ok.disabled = false;
 }
 
@@ -91,6 +106,7 @@ $("kCorrige").onclick = () => { digitos = ""; chapaSel = null; branco = false; r
 $("kBranco").onclick  = () => { digitos = ""; chapaSel = null; branco = true; render(); };
 
 $("kConfirma").onclick = () => {
+  if (erroCarga) return;
   if (!branco && !chapaSel) return;
   // Persiste escolha para a tela de confirmação
   State.set("digitos", digitos);
@@ -101,7 +117,10 @@ $("kConfirma").onclick = () => {
 
 document.addEventListener("keydown", e => {
   if (/^\d$/.test(e.key)) digitar(e.key);
-  else if (e.key === "Backspace") { if (branco) branco = false; else digitos = digitos.slice(0, -1); atualizar(); }
+  else if (e.key === "Backspace") {
+    if (branco) branco = false; else digitos = digitos.slice(0, -1);
+    atualizar();
+  }
   else if (e.key === "Delete" || e.key === "Escape") $("kCorrige").click();
   else if (e.key === "Enter" && !$("kConfirma").disabled) $("kConfirma").click();
 });

@@ -1,0 +1,175 @@
+/* ============================================================
+   URNA — ficha da chapa (presidente + mini blocos dos integrantes)
+   Carregar DEPOIS de urna.css. Usa só as variáveis dela.
+   ============================================================ */
+
+.display-titulo{font-size:clamp(24px,5vw,30px)}
+.chapa-view{flex:1; display:flex; flex-direction:column; min-width:0}
+
+/* Evita atraso/zoom por toque duplo nos botões da urna */
+.k, .btn{touch-action:manipulation}
+
+/* ─── Ficha ─── */
+.ficha{
+  --cor:var(--acc);                 /* sobrescrita inline com a cor da chapa */
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+
+/* Topo: número da chapa + nome + presidente */
+.ficha-topo{display:flex; gap:14px; align-items:center}
+
+.ficha-num{
+  flex:none;
+  min-width:84px;
+  height:84px;
+  padding:0 10px;
+  display:grid;
+  place-items:center;
+  border-radius:12px;
+  background:var(--cor);
+  color:#fff;
+  font:800 clamp(40px,10vw,52px)/1 "Barlow Condensed","Arial Narrow",sans-serif;
+  text-shadow:0 2px 6px #0005;
+}
+
+.ficha-id{min-width:0}
+.ficha-id h2{font-size:clamp(24px,5vw,34px); line-height:1.05}
+
+.pres{margin-top:6px}
+.pres .linha{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.pres .m-nome{font-size:clamp(17px,3.6vw,20px)}
+
+.proposta{
+  margin:0;
+  color:var(--mut);
+  font-size:14px;
+  display:-webkit-box;
+  -webkit-line-clamp:3;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+
+/* ─── Mini blocos dos integrantes ─── */
+.membros{
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;
+}
+.membro{
+  min-width:0;
+  padding:7px 10px 8px;
+  border:1px solid var(--line);
+  border-left:4px solid var(--cor);      /* a cor identifica a chapa */
+  border-radius:8px;
+  background:var(--surf);
+  display:grid;
+  grid-template-columns:1fr auto;
+  grid-template-areas:"cargo turma" "nome nome";
+  gap:2px 8px;
+  align-items:start;
+}
+
+/* Textos (valem tanto para os blocos quanto para o presidente) */
+.m-cargo{
+  grid-area:cargo;
+  font-size:12px;
+  line-height:1.25;
+  font-weight:700;
+  color:var(--mut);
+}
+.m-nome{
+  grid-area:nome;
+  font-weight:700;
+  font-size:15px;
+  line-height:1.25;
+  overflow-wrap:anywhere;
+}
+.m-turma{
+  grid-area:turma;
+  font-size:12px;
+  font-weight:700;
+  line-height:1.4;
+  padding:0 7px;
+  border-radius:99px;
+  border:1px solid var(--line);
+  background:var(--scr);
+  color:var(--mut);
+  white-space:nowrap;
+}
+
+/* ─── Telas maiores: mais colunas, menos altura ─── */
+@media (min-width:560px){
+  .membros{grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:8px}
+}
+
+/* ─── Celular pequeno ─── */
+@media (max-width:380px){
+  .ficha-num{min-width:72px; height:72px}
+  .membro{padding:6px 8px 7px}
+  .m-nome{font-size:14px}
+}
+
+/* ─── Celular deitado: a tela rola em vez de empurrar o teclado ─── */
+@media (max-height:500px) and (orientation:landscape){
+  .display{overflow-y:auto; max-height:calc(100dvh - 70px)}
+  .ficha{gap:10px}
+  .ficha-num{min-width:64px; height:64px; font-size:36px}
+  .m-nome{font-size:14px}
+}
+
+/* ============================================================
+   TELA INICIAL — cartão compacto da chapa
+   ============================================================ */
+.chapas{align-items:start}          /* abrir um cartão não estica os vizinhos */
+
+.chapa-card .banner{
+  aspect-ratio:auto;
+  height:88px;
+  align-items:flex-end;
+  justify-content:flex-start;
+}
+.chapa-card .bd{padding:14px 16px 12px}
+.chapa-card h3{margin-bottom:10px}
+
+.lideres{display:grid; gap:10px}
+.lider, .pres{min-width:0}
+.lider{padding-left:10px; border-left:3px solid var(--cor)}
+.lider .m-cargo{display:block}
+.lider .linha{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.lider .m-nome{font-size:16px}
+
+/* Diretoria recolhível */
+.integrantes{margin-top:14px; border-top:1px solid var(--line)}
+.integrantes summary{
+  list-style:none;
+  cursor:pointer;
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  font-weight:700;
+  font-size:15px;
+  color:var(--ink);
+}
+.integrantes summary::-webkit-details-marker{display:none}
+.integrantes summary::after{
+  content:"";
+  width:8px; height:8px;
+  margin-right:4px;
+  border-right:2px solid currentColor;
+  border-bottom:2px solid currentColor;
+  transform:rotate(45deg) translateY(-2px);
+  transition:transform .15s;
+}
+.integrantes[open] summary::after{transform:rotate(-135deg) translateY(-2px)}
+.integrantes summary:focus-visible{outline:3px solid var(--acc); outline-offset:2px; border-radius:6px}
+.integrantes .ver-menos{display:none}
+.integrantes[open] .ver-mais{display:none}
+.integrantes[open] .ver-menos{display:inline}
+.integrantes .membros{margin:2px 0 4px; grid-template-columns:1fr}

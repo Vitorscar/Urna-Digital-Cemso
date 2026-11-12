@@ -2,28 +2,42 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Confirmar voto</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#14213d">
+<meta name="robots" content="noindex">
+<title>Confirmar voto</title>
 <link rel="stylesheet" href="css/urna.css">
+<link rel="stylesheet" href="css/urna-membros.css">
 </head>
 <body>
+
 <header>
   <div><b id="escola">Urna</b><br><span>Eleição do Grêmio</span></div>
   <span>Confirmação</span>
 </header>
+
 <main>
+  <noscript>
+    <p class="msg err">Ative o JavaScript do navegador para votar.</p>
+  </noscript>
+
   <div class="confirm">
     <h1 class="title center">CONFIRME SEU VOTO</h1>
-    <div class="card" id="cardConfirma"></div>
+    <div class="card" id="cardConfirma" aria-live="polite"></div>
     <div class="msg" id="msgVoto" role="alert"></div>
-    <button class="btn" id="btnConfirmaFinal">CONFIRMA</button>
-    <button class="btn warn" id="btnVolta">CORRIGE</button>
+    <button type="button" class="btn" id="btnConfirmaFinal">CONFIRMA</button>
+    <button type="button" class="btn warn" id="btnVolta">CORRIGE</button>
   </div>
 </main>
+
 <div class="foot">Sistema escolar de votação.</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/config.js"></script>
 <script src="js/state.js"></script>
 <script src="js/audio.js"></script>
+<script src="js/chapa-view.js"></script>
 <script src="js/confirmar.js"></script>
 </body>
 </html>
