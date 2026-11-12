@@ -17,6 +17,7 @@ const MOTIVOS = {
   numero_duplicado:    "Já existe uma chapa com esse número.",
   matricula_duplicada: "Já existe um eleitor com essa matrícula.",
   tem_votos:           "Essa chapa já recebeu votos e não pode ser excluída.",
+  membros_invalidos:   "Dados dos cargos inválidos.",
 };
 
 const TURNOS = ["Matutino", "Vespertino", "Noturno"];
@@ -191,25 +192,50 @@ $("btnToggle").onclick = () => acao($("btnToggle"), async () => {
 });
 
 /* ─────────────────────────────────────────────
-   ABA CHAPAS
+   ABA CHAPAS  (um bloco por cargo: nome + turma)
    ───────────────────────────────────────────── */
+const CARGOS = [
+  "Presidente",
+  "Vice-Presidente",
+  "Secretário(a) Geral",
+  "Diretor(a) Financeiro",
+  "Diretor(a) Social",
+  "Diretor(a) Cultural",
+  "Diretor(a) de Imprensa e Comunicação",
+  "Diretor(a) de Esporte",
+  "Diretor(a) de Meio Ambiente e Saúde",
+  "Diretor(a) de Relações Estudantis",
+];
+// true = todos os cargos exigem nome e turma. false = só o Presidente é obrigatório.
+const EXIGIR_TODOS = true;
+
+// Lê os membros da chapa; chapas antigas (sem `membros`) mostram só o candidato como Presidente
+function membrosDaChapa(c) {
+  if (Array.isArray(c?.membros) && c.membros.length) return c.membros;
+  return c?.candidato ? [{ cargo: CARGOS[0], nome: c.candidato, turma: "" }] : [];
+}
+
 async function carregarChapas() {
   try {
     const data = await rpc("admin_listar_chapas");
     chapasCache = data.chapas || [];
     $("tblChapas").innerHTML = chapasCache.length === 0
       ? `<tr><td colspan="5" style="text-align:center;color:var(--mut)">Nenhuma chapa cadastrada.</td></tr>`
-      : chapasCache.map(c => `
+      : chapasCache.map(c => {
+          const m = membrosDaChapa(c).filter(x => x.nome);
+          const detalhe = m.map(x => `${x.cargo}: ${x.nome}${x.turma ? ` (${x.turma})` : ""}`).join("\n");
+          return `
         <tr>
           <td><b>${esc(c.numero)}</b></td>
           <td>${esc(c.nome)}</td>
           <td>${esc(c.candidato)}</td>
-          <td>${esc((Array.isArray(c.integrantes) ? c.integrantes : []).join(", "))}</td>
+          <td title="${esc(detalhe)}">${m.length} de ${CARGOS.length} cargos</td>
           <td class="acoes-cel">
             <button data-acao="editar" data-id="${c.id}">Editar</button>
             <button data-acao="excluir" data-id="${c.id}">Excluir</button>
           </td>
-        </tr>`).join("");
+        </tr>`;
+        }).join("");
   } catch (e) {
     console.error("carregarChapas:", e);
     $("tblChapas").innerHTML =
@@ -232,38 +258,69 @@ $("btnNovaChapa").onclick = () => abrirModalChapa(null);
 
 function abrirModalChapa(chapa) {
   const editando = !!chapa;
+  const porCargo = Object.fromEntries(membrosDaChapa(chapa).map(m => [m.cargo, m]));
+
+  const blocos = CARGOS.map((cargo, i) => {
+    const m = porCargo[cargo] || {};
+    return `
+    <div class="cargo-bloco">
+      <label><b>${esc(cargo.toUpperCase())}</b></label>
+      <div class="cargo-linha">
+        <input id="fcNome${i}"  placeholder="Nome"  value="${esc(m.nome || "")}" >
+        <input id="fcTurma${i}" placeholder="Turma" value="${esc(m.turma || "")}">
+      </div>
+    </div>`;
+  }).join("");
+
   $("modalTitulo").textContent = editando ? "Editar chapa" : "Nova chapa";
   $("modalCorpo").innerHTML = `
     <label>Número</label>
     <input id="fcNumero" maxlength="4" value="${esc(chapa?.numero || "")}">
     <label>Nome da chapa</label>
     <input id="fcNome" value="${esc(chapa?.nome || "")}">
-    <label>Candidato(a)</label>
-    <input id="fcCandidato" value="${esc(chapa?.candidato || "")}">
-    <label>Integrantes (separados por vírgula)</label>
-    <input id="fcIntegrantes" value="${esc((Array.isArray(chapa?.integrantes) ? chapa.integrantes : []).join(", "))}">
     <label>Proposta (opcional)</label>
     <textarea id="fcInfo">${esc(chapa?.info || "")}</textarea>
     <label>Cor (hex)</label>
     <input id="fcCor" value="${esc(chapa?.cor || "#1d4ed8")}">
+    <hr class="modal-sep">
+    ${blocos}
   `;
   $("modalOk").onclick = () => salvarChapa(chapa?.id ?? null);
   abrirModal();
 }
 
 function lerFormChapa() {
-  const f = {
-    numero:    $("fcNumero").value.trim(),
-    nome:      $("fcNome").value.trim(),
-    candidato: $("fcCandidato").value.trim(),
-    integ:     $("fcIntegrantes").value.split(",").map(s => s.trim()).filter(Boolean),
-    info:      $("fcInfo").value.trim(),
-    cor:       $("fcCor").value.trim() || "#1d4ed8",
+  const numero = $("fcNumero").value.trim();
+  const nome   = $("fcNome").value.trim();
+  const cor    = $("fcCor").value.trim() || "#1d4ed8";
+
+  if (!numero || !nome) throw new Error("Preencha o número e o nome da chapa.");
+  if (!/^\d+$/.test(numero)) throw new Error("O número da chapa deve conter apenas dígitos.");
+  if (!/^#[0-9a-fA-F]{6}$/.test(cor)) throw new Error("Cor inválida. Use o formato #RRGGBB.");
+
+  const membros = CARGOS.map((cargo, i) => ({
+    cargo,
+    nome:  $(`fcNome${i}`).value.trim(),
+    turma: $(`fcTurma${i}`).value.trim(),
+  }));
+
+  membros.forEach((m, i) => {
+    const obrigatorio = EXIGIR_TODOS || i === 0;
+    if (obrigatorio && (!m.nome || !m.turma)) {
+      throw new Error(`Preencha nome e turma de: ${m.cargo}.`);
+    }
+    if (m.turma && !m.nome) throw new Error(`Informe o nome de: ${m.cargo}.`);
+  });
+
+  const preenchidos = membros.filter(m => m.nome);
+  return {
+    numero, nome, cor,
+    info: $("fcInfo").value.trim(),
+    membros: preenchidos,
+    candidato: membros[0].nome,   // Presidente = candidato exibido na urna
+    // Texto para a urna (sem o presidente, que já é o candidato)
+    integrantes: preenchidos.slice(1).map(m => `${m.cargo}: ${m.nome}${m.turma ? ` (${m.turma})` : ""}`),
   };
-  if (!f.numero || !f.nome || !f.candidato) throw new Error("Preencha número, nome e candidato.");
-  if (!/^\d+$/.test(f.numero)) throw new Error("O número da chapa deve conter apenas dígitos.");
-  if (!/^#[0-9a-fA-F]{6}$/.test(f.cor)) throw new Error("Cor inválida. Use o formato #RRGGBB.");
-  return f;
 }
 
 function salvarChapa(id) {
@@ -271,7 +328,8 @@ function salvarChapa(id) {
     const f = lerFormChapa();
     const args = {
       p_numero: f.numero, p_nome: f.nome, p_candidato: f.candidato,
-      p_integrantes: f.integ, p_info: f.info, p_cor: f.cor,
+      p_integrantes: f.integrantes, p_info: f.info, p_cor: f.cor,
+      p_membros: f.membros,
     };
     if (id == null) await rpc("admin_criar_chapa", args);
     else            await rpc("admin_atualizar_chapa", { p_id: id, ...args });
