@@ -347,8 +347,35 @@ function excluirChapa(btn, id) {
 }
 
 /* ─────────────────────────────────────────────
-   ABA ELEITORES  (matrícula, nome, turma, turno)
+   ABA ELEITORES
+   Turma vem como código  ETAPA_ANO_TURNO_TURMA  (ex.: EM_2_M_1_A).
+   O banco interpreta (parse_turma); aqui só espelhamos a regra para
+   mostrar a prévia. Mantenha igual ao SQL.
    ───────────────────────────────────────────── */
+const TURNO_CODIGOS = {
+  M: "Matutino",   MAT: "Matutino",   MATUTINO: "Matutino",
+  V: "Vespertino", VESP: "Vespertino", VESPERTINO: "Vespertino",
+  N: "Noturno",    NOT: "Noturno",    NOTURNO: "Noturno",
+  I: "Integral",   INT: "Integral",   INTEGRAL: "Integral",
+};
+
+function interpretarTurma(codigo) {
+  const bruto = String(codigo || "").trim();
+  const plano = { ok: false, etapa: "", serie: "", turno: "", turma: bruto };
+  const c = bruto.toUpperCase();
+  if (!c.includes("_")) return plano;                       // ex.: "3º Ano A"
+  const t = c.split(/[_\-\s/]+/).filter(Boolean);
+  if (t.length < 3 || !/^[A-Z]{2,4}$/.test(t[0]) || !/^\d+$/.test(t[1])) return plano;
+  const turno = TURNO_CODIGOS[t[2]] || "";
+  const resto = t.slice(turno ? 3 : 2);
+  if (!resto.length) return plano;
+  return { ok: true, etapa: t[0], serie: t[1], turno, turma: resto.join("_") };
+}
+
+function descreverTurma(p) {
+  return `${p.etapa} · ${p.serie}º ano · ${p.turno || "turno não informado"} · turma ${p.turma}`;
+}
+
 async function carregarEleitores(busca = "") {
   try {
     const data = await rpc("admin_listar_eleitores", { p_busca: busca });
@@ -357,11 +384,13 @@ async function carregarEleitores(busca = "") {
 
     let html = eleitoresCache.length === 0
       ? `<tr><td colspan="6" style="text-align:center;color:var(--mut)">Nenhum eleitor.</td></tr>`
-      : eleitoresCache.map(e => `
+      : eleitoresCache.map(e => {
+          const turma = e.etapa ? `${e.serie}º ${e.etapa} · ${e.turma}` : e.turma;
+          return `
         <tr>
           <td><b>${esc(e.matricula)}</b></td>
           <td>${esc(e.nome)}</td>
-          <td>${esc(e.turma)}</td>
+          <td>${esc(turma)}</td>
           <td>${esc(e.turno)}</td>
           <td>${e.votou
             ? '<span class="badge ok">Sim</span>'
@@ -370,7 +399,8 @@ async function carregarEleitores(busca = "") {
             ${e.votou ? `<button data-acao="desmarcar" data-id="${e.id}">Desmarcar</button>` : ""}
             <button data-acao="excluir" data-id="${e.id}">Excluir</button>
           </td>
-        </tr>`).join("");
+        </tr>`;
+        }).join("");
 
     if (total > eleitoresCache.length) {
       html += `<tr><td colspan="6" style="text-align:center;color:var(--mut)">
@@ -400,9 +430,19 @@ $("btnNovoEleitor").onclick = () => {
   $("modalCorpo").innerHTML = `
     <label>Matrícula</label><input id="feMat" maxlength="20">
     <label>Nome</label><input id="feNome">
-    <label>Turma</label><input id="feTurma" placeholder="ex.: 3º Ano A">
-    <label>Turno</label>${selectTurno("")}
+    <label>Turma (código)</label>
+    <input id="feTurma" placeholder="ex.: EM_2_M_1_A" autocapitalize="characters" spellcheck="false">
+    <p class="sub" id="feInterp" style="margin:6px 0 0;font-size:14px"></p>
+    <label>Turno <span style="font-weight:400">(só se não estiver no código)</span></label>
+    ${selectTurno("")}
   `;
+  $("feTurma").addEventListener("input", () => {
+    const v = $("feTurma").value.trim();
+    const p = interpretarTurma(v);
+    $("feInterp").textContent = !v ? ""
+      : p.ok ? "Entendido: " + descreverTurma(p)
+             : "Fora do padrão ETAPA_ANO_TURNO_TURMA. Será salvo como turma comum.";
+  });
   $("modalOk").onclick = salvarNovoEleitor;
   abrirModal();
 };
@@ -441,7 +481,7 @@ function excluirEleitor(btn, id) {
 
 /* ─────────────────────────────────────────────
    IMPORTAÇÃO EM MASSA
-   Colunas: matrícula, nome, turma, turno
+   Colunas: matrícula, nome, turma (código EM_2_M_1_A) [, turno opcional]
    Aceita: .xlsx, .xls, .csv, .txt ou colagem do Excel
    ───────────────────────────────────────────── */
 const SHEETJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
@@ -457,7 +497,7 @@ function carregarSheetJS() {
   });
 }
 
-// Divide uma linha respeitando aspas ("Silva, João";3A)
+// Divide uma linha respeitando aspas ("Silva, João";EM_2_M_1_A)
 function dividirLinha(linha, sep) {
   const out = []; let cur = ""; let aspas = false;
   for (let i = 0; i < linha.length; i++) {
@@ -488,7 +528,7 @@ function parseEleitores(texto) {
     idx = {
       matricula: achar(/matr[ií]cula/i, 0),
       nome:      achar(/nome/i, 1),
-      turma:     achar(/turma|s[eé]rie/i, 2),
+      turma:     achar(/turma|c[oó]digo|classe|s[eé]rie/i, 2),
       turno:     achar(/turno/i, 3),
     };
   }
@@ -503,17 +543,25 @@ function parseEleitores(texto) {
 }
 
 function atualizarPrevia() {
-  const n = parseEleitores($("fiTexto").value).length;
-  $("fiProgresso").textContent = n ? `${n} eleitor(es) válidos detectados.` : "";
+  const lista = parseEleitores($("fiTexto").value);
+  if (!lista.length) { $("fiProgresso").textContent = ""; return; }
+  const fora = lista.filter(x => !interpretarTurma(x.turma).ok);
+  let txt = `${lista.length} eleitor(es) válidos. ${lista.length - fora.length} no padrão ETAPA_ANO_TURNO_TURMA.`;
+  if (fora.length) {
+    const ex = [...new Set(fora.map(x => x.turma || "(vazio)"))].slice(0, 3).join(", ");
+    txt += ` ${fora.length} fora do padrão (ex.: ${ex}): serão salvos como turma comum.`;
+  }
+  $("fiProgresso").textContent = txt;
 }
 
 $("btnImportar").onclick = () => {
   $("modalTitulo").textContent = "Importar eleitores";
   $("modalCorpo").innerHTML = `
     <p style="color:var(--mut);margin-bottom:8px">
-      Colunas: <code>matrícula, nome, turma, turno</code>.<br>
+      Colunas: <code>matrícula, nome, turma</code> — a turma é o código, ex.: <code>EM_2_M_1_A</code>
+      (etapa, ano, turno, turma). Uma coluna <code>turno</code> é opcional.<br>
       Envie um arquivo <b>.xlsx</b> / <b>.csv</b> ou cole as células copiadas do Excel.
-      Se a primeira linha tiver cabeçalho, ela é reconhecida automaticamente.
+      Cabeçalho na primeira linha é reconhecido automaticamente.
     </p>
     <input type="file" id="fiArquivo" accept=".xlsx,.xls,.csv,.txt">
     <textarea id="fiTexto" style="min-height:160px;margin-top:8px"></textarea>
@@ -557,18 +605,19 @@ function importarEleitores() {
     const lista = parseEleitores($("fiTexto").value);
     if (!lista.length) throw new Error("Nenhuma linha válida (matrícula e nome são obrigatórios).");
 
-    let ins = 0, ign = 0;
+    let ins = 0, ign = 0, interp = 0;
     const LOTE = 1000;
     for (let i = 0; i < lista.length; i += LOTE) {
       $("fiProgresso").textContent = `Enviando ${Math.min(i + LOTE, lista.length)} / ${lista.length}…`;
       try {
         const d = await rpc("admin_importar_eleitores", { p_lista: lista.slice(i, i + LOTE) });
-        ins += d.inseridos; ign += d.ignorados;
+        ins += d.inseridos; ign += d.ignorados; interp += d.interpretados || 0;
       } catch (e) {
         throw new Error(`Falha no lote ${i / LOTE + 1} (já inseridos até aqui: ${ins}). ${e.message}`);
       }
     }
-    alert(`Importados: ${ins}.\nIgnorados (matrícula já existia ou duplicada no arquivo): ${ign}.`);
+    alert(`Importados: ${ins} (${interp} com turma no padrão, ${ins - interp} como turma comum).\n` +
+          `Ignorados (matrícula já existia ou duplicada no arquivo): ${ign}.`);
     fecharModal();
     await carregarEleitores();
   });
